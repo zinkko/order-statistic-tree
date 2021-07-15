@@ -5,13 +5,20 @@ pub struct Node {
     pub left: Option<Box<Node>>,
     pub right: Option<Box<Node>>,
     pub value: i32,
-
     pub color: Color,
+    pub size: i32,
+}
+
+fn size(node_or_leaf: Option<&Box<Node>>) -> i32 {
+    match node_or_leaf {
+        Some(node) => node.size,
+        None => 0,
+    }
 }
 
 impl Node {
     pub fn new(color: Color, value: i32) -> Node {
-        Node { color: color, value: value, left: None, right: None }
+        Node { color: color, value: value, left: None, right: None, size: 1 }
     }
 
     pub fn get_child(&mut self, dir: Direction) -> Option<&mut Box<Node>> {
@@ -32,25 +39,33 @@ impl Node {
         match dir {
             Direction::Left => self.left = Some(Box::new(node)),
             Direction::Right => self.right = Some(Box::new(node)),
-        }
+        };
+        self.recalculate_size();
     }
 
     pub fn set_child_or_leaf(&mut self, dir: Direction, child: Option<Box<Node>>) {
         match dir {
             Direction::Left => self.left = child,
             Direction::Right => self.right = child,
-        }
+        };
+        self.recalculate_size();
     }
 
     pub fn remove_child(&mut self, dir: Direction) -> Option<Box<Node>> {
-        match dir {
+        let child = match dir {
             Direction::Left => {
                 self.left.take()
             },
             Direction::Right => {
                 self.right.take()
             }
-        }
+        };
+        self.recalculate_size();
+        child
+    }
+
+    pub fn recalculate_size(&mut self) {
+        self.size = 1 + size(self.left.as_ref()) + size(self.right.as_ref());
     }
 
     pub fn is_black(&self) -> bool {
@@ -111,6 +126,7 @@ impl Clone for Node {
         Node {
             color: self.color,
             value: self.value,
+            size: self.size,
             // left and right are owned by self, so they cannot be moved here
             left: None,
             right: None,

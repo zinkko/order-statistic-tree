@@ -15,7 +15,7 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
     let mut next = node.get_child(direction);
     if next.is_none() {
         node.set_child(direction, Node::new(Color::Red, value));
-        
+        // set child will correct the size of node
         return match node.color {
             Color::Black => InsertReturn::Done,
             Color::Red => InsertReturn::Parent(direction),
@@ -23,6 +23,7 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
     }
 
     let state = recursive_insert(next.as_mut().unwrap(), value);
+    node.recalculate_size();
     match state {
         InsertReturn::Done => InsertReturn::Done,
         InsertReturn::Node => {
@@ -56,6 +57,7 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
             rotated_node.get_child(rotation_dir).expect("The parent should have been rotated here").color = Color::Red;
             
             node.set_child(direction, rotated_node);
+            // set_child will fix size of node. The sizes of nodes in the new rotated subtree are taken care of in .rotate
             InsertReturn::Done
         },
     }
@@ -117,7 +119,7 @@ fn successor_stage_delete(node: &mut Box<Node>) -> (DeleteReturn, i32) {
 }
 
 fn handle_delete_return(node: &mut Box<Node>, dir: Direction, state: DeleteReturn) -> DeleteReturn {
-    match state {
+    let delete_return = match state {
         DeleteReturn::NotFound => DeleteReturn::NotFound,
         DeleteReturn::Done => DeleteReturn::Done,
         DeleteReturn::Continue => do_delete_checks(node, dir),
@@ -152,7 +154,9 @@ fn handle_delete_return(node: &mut Box<Node>, dir: Direction, state: DeleteRetur
             node.set_child(dir, rotated);
             DeleteReturn::Done
         }
-    }
+    };
+    node.recalculate_size();
+    delete_return
 }
 
 fn case3(child: Node, direction: Direction) -> Node {
@@ -263,12 +267,7 @@ impl OrderStatTree {
 
     pub fn insert(&mut self, value: i32) {
         if self.root.is_none() {
-            self.root = Some(Box::new(Node {
-                color: Color::Black,
-                value: value,
-                left: None,
-                right: None,
-            }));
+            self.root = Some(Box::new(Node::new(Color::Black, value)));
             return;
         }
         let insert_result = recursive_insert(self.root.as_mut().unwrap(), value);
@@ -443,16 +442,19 @@ mod tests {
             root: Some(Box::new(Node {
                 color: Color::Red,
                 value: 5,
+                size: 5,
                 left: Some(Box::new(Node {
                     color: Color::Red,
                     value: 3,
-                    left: Some(Box::new(Node { color: Color::Red, value: 1, left: None, right: None })),
-                    right: Some(Box::new(Node { color: Color::Red, value: 4, left: None, right: None })),
+                    size: 3,
+                    left: Some(Box::new(Node::new(Color::Red, 1))),
+                    right: Some(Box::new(Node::new(Color::Red, 4))),
                 })),
                 right: Some(Box::new(Node {
                     color: Color::Red,
+                    size: 2,
                     value: 8,
-                    left: Some(Box::new(Node { color: Color::Red, value: 6, left: None, right: None})),
+                    left: Some(Box::new(Node::new(Color::Red, 6))),
                     right: None,
                 })),
             })),
