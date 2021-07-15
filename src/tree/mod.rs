@@ -23,8 +23,7 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
     }
 
     let state = recursive_insert(next.as_mut().unwrap(), value);
-    node.recalculate_size();
-    match state {
+    let insert_return = match state {
         InsertReturn::Done => InsertReturn::Done,
         InsertReturn::Node => {
             if node.color == Color::Black {
@@ -43,7 +42,7 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
                 // case 4 & 5, inner grandchild
                 if child_direction != direction {
                     InsertReturn::Rotate(RotationType::Double(direction.opposite()))
-                // case 5
+                    // case 5
                 } else {
                     InsertReturn::Rotate(RotationType::Single(direction.opposite()))
                 }
@@ -60,6 +59,47 @@ fn recursive_insert(node: &mut Node, value: i32) -> InsertReturn {
             // set_child will fix size of node. The sizes of nodes in the new rotated subtree are taken care of in .rotate
             InsertReturn::Done
         },
+    };
+    node.recalculate_size();
+    insert_return
+}
+
+fn recursive_pop(node: &mut Box<Node>, subtree_idx: i32) -> (DeleteReturn, i32) {
+    let left_size = node::subtree_size(node.left.as_ref());
+    if subtree_idx == left_size {
+        let v = node.value;
+        let delete_return = if node.left.is_some() && node.right.is_some() {
+            let (succ_delete_return, successor_value) = successor_stage_delete(node.right.as_mut().unwrap());
+            // successor value moved here, the successor node is deleted
+            node.value = successor_value;
+            handle_delete_return(node, Direction::Right, succ_delete_return)
+        } else if node.color == Color::Red {
+            DeleteReturn::Delete(None, true)
+        } else if node.left.is_some() {
+            DeleteReturn::Delete(node.left.take(), true)
+        } else if node.right.is_some() {
+            DeleteReturn::Delete(node.right.take(), true)
+        } else {
+            DeleteReturn::Delete(None, false)
+        };
+        (delete_return, v)
+    } else if subtree_idx < left_size {
+        match node.left.as_mut() {
+            Some(left_child) => {
+                let (delete_return, value) = recursive_pop(left_child, subtree_idx);
+                (handle_delete_return(node, Direction::Left, delete_return), value)
+            },
+            None => unreachable!("Valid indexes should always be found. Requested (sub)index: {}", subtree_idx),
+        }
+    } else {
+        match node.right.as_mut() {
+            Some(right_child) => {
+                let new_idx = subtree_idx - left_size - 1;
+                let (delete_return, value) = recursive_pop(right_child, new_idx);
+                (handle_delete_return(node, Direction::Right, delete_return), value)
+            },
+            None => unreachable!("Valid indexes should always be found. Requested (sub)index: {}", subtree_idx),
+        }
     }
 }
 
@@ -96,7 +136,6 @@ fn recursive_delete(node: &mut Box<Node>, value: i32) -> DeleteReturn {
             None => DeleteReturn::NotFound,
         }
     }
-
 }
 
 fn successor_stage_delete(node: &mut Box<Node>) -> (DeleteReturn, i32) {
@@ -324,6 +363,73 @@ impl OrderStatTree {
             }
         }
     }
+
+    pub fn size(&self) -> i32 {
+        match &self.root {
+            Some(node) => node.size,
+            None => 0,
+        }
+    }
+
+    pub fn get(&self, idx: i32) -> Result<i32, &str> {
+        if idx < 0 || idx >= self.size() {
+            return Err("Index out of bounds");
+        }
+
+        let mut node_or_leaf = &self.root;
+        let mut behind = 0;
+        while let Some(node) = node_or_leaf {
+            let subtree_idx = idx - behind;
+            let left_size = node::subtree_size(node.left.as_ref());
+            if subtree_idx == left_size {
+                return Ok(node.value);
+            } else if subtree_idx < left_size {
+                node_or_leaf = &node.left;
+            } else {
+                behind += left_size + 1;
+                node_or_leaf = &node.right;
+            }
+        }
+        unreachable!("get should find value for every legit index. Requested index: {}", idx);
+    }
+
+    pub fn pop(&mut self, idx: i32) -> Result<i32, &str> {
+        if idx < 0 || idx >= self.size() {
+            return Err("Index out of bounds");
+        }
+
+        let (delete_result, value) = recursive_pop(self.root.as_mut().unwrap(), idx);
+        match delete_result {
+            DeleteReturn::Done => Ok(value),
+            // case 2
+            DeleteReturn::Continue => Ok(value),
+            DeleteReturn::NotFound => unreachable!("Valid indexes should always be found"),
+            DeleteReturn::Delete(replacement, _) => {
+                self.root = replacement;
+                Ok(value)
+            }
+            DeleteReturn::Rotate(rotation_type) => {
+                let old_root = self.root.take().unwrap();
+                let old_parent_color = old_root.color;
+                let mut new_root = old_root.rotate(rotation_type);
+                new_root.color = old_parent_color;
+                if let Some(ref mut left_child) = new_root.left {
+                    left_child.color = Color::Black;
+                }
+                if let Some(ref mut right_child) = new_root.right {
+                    right_child.color = Color::Black;
+                }
+                self.root = Some(Box::new(new_root));
+                Ok(value)
+            },
+            DeleteReturn::Case3(direction) => {
+                let old_root = *(self.root.take().unwrap());
+                let new_root = case3(old_root, direction);
+                self.root = Some(Box::new(new_root));
+                Ok(value)
+            }
+        }
+    }
 }
 
 impl IntoIterator for OrderStatTree {
@@ -412,15 +518,19 @@ mod tests {
             }
         }
 
-        pub fn assert_tree_size(tree: &OrderStatTree, expected_size: usize) {
-            assert_eq!(subtree_size(tree.root.as_ref()), expected_size, "OrderStatTree was not the right size");
+        pub fn assert_subtree_sizes(tree: &OrderStatTree, expected_size: i32) {
+            assert_eq!(check_subtree_sizes(tree.root.as_ref()), expected_size, "Final size of tree was not right");
         }
 
-        fn subtree_size(node_or_leaf: Option<&Box<Node>>) -> usize {
-            match node_or_leaf {
-                Some(node) => subtree_size(node.left.as_ref()) + subtree_size(node.right.as_ref()) + 1,
+        fn check_subtree_sizes(node_or_leaf: Option<&Box<Node>>) -> i32 {
+            let size = match node_or_leaf {
+                Some(node) => check_subtree_sizes(node.left.as_ref()) + check_subtree_sizes(node.right.as_ref()) + 1,
                 None => 0,
+            };
+            if let Some(node) = node_or_leaf {
+                assert_eq!(size, node.size);
             }
+            size
         }
     }
 
@@ -478,21 +588,21 @@ mod tests {
         tools::assert_no_red_violations(&t);
         tools::assert_no_black_violations(&t);
 
-        tools::assert_tree_size(&t, 3);
+        tools::assert_subtree_sizes(&t, 3);
     }
 
     #[test]
     fn test_insert_2() {
         let mut tree = OrderStatTree::new();
         let values = vec![45, 13, 54, 14, 77, 12, 0, -3, 43, 111, 124, 55, 3, 1, 211434, 3];
-        let expected_size = values.len();
+        let expected_size = values.len() as i32;
         for i in values {
             tree.insert(i);
         }
 
         tools::assert_no_red_violations(&tree);
         tools::assert_no_black_violations(&tree);
-        tools::assert_tree_size(&tree, expected_size);
+        tools::assert_subtree_sizes(&tree, expected_size);
     }
 
     #[test]
@@ -510,7 +620,7 @@ mod tests {
     fn test_delete_1() {
         let mut tree = OrderStatTree::new();
         let initial_values = vec![176, 342, 941, 541, 973, 1234, 55, -1, 45, -2245, 451, 5];
-        let initial_len = initial_values.len();
+        let initial_len = initial_values.len() as i32;
         for i in initial_values {
             tree.insert(i);
         }
@@ -522,7 +632,7 @@ mod tests {
         // not in tree!
         tree.delete(100);
 
-        tools::assert_tree_size(&tree, initial_len - 4);
+        tools::assert_subtree_sizes(&tree, initial_len - 4);
         tools::assert_no_red_violations(&tree);
         tools::assert_no_black_violations(&tree);
     }
@@ -538,7 +648,7 @@ mod tests {
         tree.delete(646);
         tree.delete(87);
         
-        tools::assert_tree_size(&tree, 997);
+        tools::assert_subtree_sizes(&tree, 997);
         tools::assert_no_red_violations(&tree);
         tools::assert_no_black_violations(&tree);
     }
@@ -554,7 +664,7 @@ mod tests {
             assert!(tree.delete(3));
         }
 
-        tools::assert_tree_size(&tree, 990);
+        tools::assert_subtree_sizes(&tree, 990);
         tools::assert_no_red_violations(&tree);
         tools::assert_no_black_violations(&tree);
     }
@@ -577,6 +687,73 @@ mod tests {
         tree.insert(123);
         tree.insert(-1);
 
-        tools::assert_tree_size(&tree, 3);
+        tools::assert_subtree_sizes(&tree, 3);
+    }
+
+    #[test]
+    fn test_get_index_1() {
+        let mut tree = OrderStatTree::new();
+        let v = vec![9287, 3876, 10293, 5847, 28745, 3982, 11, 351, 0, -1, 34];
+        for i in v.iter() {
+            tree.insert(*i);
+        }
+
+        assert_eq!(tree.size(), v.len() as i32);
+        assert_eq!(tree.get(0), Ok(-1));
+        assert_eq!(tree.get((v.len() as i32) - 1), Ok(28745));
+        assert_eq!(tree.get(4), Ok(351));
+    }
+
+    #[test]
+    fn test_get_index_2() {
+        let mut tree = OrderStatTree::new();
+        for i in 0..1000 {
+            tree.insert(i);
+        }
+
+        assert_eq!(tree.get(364), Ok(364));
+        assert_eq!(tree.get(999), Ok(999));
+
+        tools::assert_subtree_sizes(&tree, 1000);
+    }
+
+    #[test]
+    fn test_sizes() {
+        let mut tree = OrderStatTree::new();
+        for i in 0..1000 {
+            tree.insert(i);
+        }
+
+        tools::assert_subtree_sizes(&tree, 1000);
+    }
+
+    #[test]
+    fn test_pop_index() {
+        let mut tree = OrderStatTree::new();
+        for i in 0..1000 {
+            tree.insert(i);
+        }
+
+        assert_eq!(tree.pop(364), Ok(364));
+        assert_eq!(tree.pop(88), Ok(88));
+        assert_eq!(tree.pop(577), Ok(579));
+
+        assert_eq!(tree.size(), 997);
+
+        tools::assert_no_red_violations(&tree);
+        tools::assert_no_black_violations(&tree);
+        tools::assert_subtree_sizes(&tree, 997);
+    }
+
+    #[test]
+    fn test_get_index_out_of_bounds() {
+        let mut tree = OrderStatTree::new();
+        for i in 0..1000 {
+            tree.insert(i);
+        }
+
+        assert!(tree.get(-1).is_err());
+        assert!(tree.get(1000).is_err());
+        assert!(tree.get(1023).is_err());
     }
 }

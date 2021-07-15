@@ -9,7 +9,7 @@ pub struct Node {
     pub size: i32,
 }
 
-fn size(node_or_leaf: Option<&Box<Node>>) -> i32 {
+pub fn subtree_size(node_or_leaf: Option<&Box<Node>>) -> i32 {
     match node_or_leaf {
         Some(node) => node.size,
         None => 0,
@@ -65,7 +65,7 @@ impl Node {
     }
 
     pub fn recalculate_size(&mut self) {
-        self.size = 1 + size(self.left.as_ref()) + size(self.right.as_ref());
+        self.size = 1 + subtree_size(self.left.as_ref()) + subtree_size(self.right.as_ref());
     }
 
     pub fn is_black(&self) -> bool {
