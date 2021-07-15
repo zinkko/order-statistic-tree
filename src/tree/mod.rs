@@ -234,13 +234,13 @@ enum DeleteReturn {
     Case3(Direction),
 }
 
-pub struct RBTree {
+pub struct OrderStatTree {
     root: Option<Box<Node>>,
 }
 
-impl RBTree {
-    pub fn new() -> RBTree {
-        RBTree { root: None }
+impl OrderStatTree {
+    pub fn new() -> OrderStatTree {
+        OrderStatTree { root: None }
     }
 
     pub fn is_empty(&self) -> bool {
@@ -327,7 +327,7 @@ impl RBTree {
     }
 }
 
-impl IntoIterator for RBTree {
+impl IntoIterator for OrderStatTree {
     type Item = i32;
     type IntoIter = iter::IntoIter;
 
@@ -355,7 +355,7 @@ fn fmt_subtree(node: &Box<Node>, formatter: &mut fmt::Formatter, indent: usize) 
     }
 }
 
-impl fmt::Debug for RBTree {
+impl fmt::Debug for OrderStatTree {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match &self.root {
             Some(root_node) => fmt_subtree(root_node, formatter, 0),
@@ -372,7 +372,7 @@ mod tests {
     mod tools {
         use super::super::*;
 
-        pub fn assert_no_red_violations(tree: &RBTree) {
+        pub fn assert_no_red_violations(tree: &OrderStatTree) {
             match &tree.root {
                 Some(node) => check_red_violations(&node),
                 None => {},
@@ -393,7 +393,7 @@ mod tests {
             }
         }
 
-        pub fn assert_no_black_violations(tree: &RBTree) {
+        pub fn assert_no_black_violations(tree: &OrderStatTree) {
             check_black_violations(tree.root.as_ref());
         }
 
@@ -413,8 +413,8 @@ mod tests {
             }
         }
 
-        pub fn assert_tree_size(tree: &RBTree, expected_size: usize) {
-            assert_eq!(subtree_size(tree.root.as_ref()), expected_size, "RBTree was not the right size");
+        pub fn assert_tree_size(tree: &OrderStatTree, expected_size: usize) {
+            assert_eq!(subtree_size(tree.root.as_ref()), expected_size, "OrderStatTree was not the right size");
         }
 
         fn subtree_size(node_or_leaf: Option<&Box<Node>>) -> usize {
@@ -427,19 +427,19 @@ mod tests {
 
     #[test]
     fn test_new_tree_is_empty() {
-        assert!(RBTree::new().is_empty());
+        assert!(OrderStatTree::new().is_empty());
     }
 
     #[test]
     fn test_after_insert_tree_not_empty() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         tree.insert(8);
         assert!(!tree.is_empty());
     }
 
     #[test]
     fn test_contains() {
-        let t = RBTree {
+        let t = OrderStatTree {
             root: Some(Box::new(Node {
                 color: Color::Red,
                 value: 5,
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn test_insert_1() {
-        let mut t = RBTree::new();
+        let mut t = OrderStatTree::new();
         t.insert(3);
         t.insert(6);
         t.insert(1);
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_insert_2() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         let values = vec![45, 13, 54, 14, 77, 12, 0, -3, 43, 111, 124, 55, 3, 1, 211434, 3];
         let expected_size = values.len();
         for i in values {
@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn test_into_iter() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         let values = vec![145, -1243, 54, -123, 434, 13];
         for i in values {
             tree.insert(i);
@@ -506,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_delete_1() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         let initial_values = vec![176, 342, 941, 541, 973, 1234, 55, -1, 45, -2245, 451, 5];
         let initial_len = initial_values.len();
         for i in initial_values {
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_delete_2() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         for i in 0..1000 {
             tree.insert(i);
         }
@@ -543,7 +543,7 @@ mod tests {
 
     #[test]
     fn test_delete_3() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         for i in 0..1000 {
             tree.insert(i % 5);
         }
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_then_insert() {
-        let mut tree = RBTree::new();
+        let mut tree = OrderStatTree::new();
         assert!(!tree.delete(8));
         let v = vec![134, 75, 13, 54, 9, 134, 4];
         for i in v.iter() {

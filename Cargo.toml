@@ -1,5 +1,5 @@
 [package]
-name = "rbtree"
+name = "order-statistic-tree"
 version = "0.1.0"
 authors = ["Ilari Sinkkonen <sinkkonenilari@gmail.com>"]
 edition = "2018"

@@ -21,7 +21,7 @@ fn add_tasks(tasks: &mut Vec<IterTask>, node: Box<Node>) {
 }
 
 impl IntoIter {
-    pub fn new(tree: RBTree) -> IntoIter {
+    pub fn new(tree: OrderStatTree) -> IntoIter {
         let mut tasks = Vec::new();
         if let Some(root_node) = tree.root {
             add_tasks(&mut tasks, root_node);
